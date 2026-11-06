@@ -3,6 +3,12 @@
   <Domain id="any">
     <General>
       <AllowMulticast>false</AllowMulticast>
+      <!-- Optional: pin DDS to the tether NIC so it never binds to docker0/usb0/wlan0.
+           Uncomment for deployment; Cyclone will refuse to start if this address is absent.
+      <Interfaces>
+        <NetworkInterface address="192.168.1.70"/>
+      </Interfaces>
+      -->
     </General>
     <Discovery>
       <ParticipantIndex>auto</ParticipantIndex>

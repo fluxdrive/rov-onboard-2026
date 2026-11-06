@@ -1,12 +1,13 @@
 # ROV Onboard
 
-Onboard computer software for the underwater ROV. Runs on Raspberry Pi 5 (Ubuntu 24.04 aarch64).
+Onboard computer software for the underwater ROV. Runs on a Raspberry Pi 5 (testing) / Compute Module 5 (ROV) under AlmaLinux 10, with ROS 2 Lyrical Luth and MAVROS from RoboStack via pixi.
 
 ## Hardware
 
 | Component | Details |
 |-----------|---------|
-| Computer | Raspberry Pi 5, Ubuntu 24.04 aarch64 |
+| Computer | Raspberry Pi 5 (testing) / CM5 (ROV), AlmaLinux 10 aarch64 |
+| ROS | ROS 2 Lyrical Luth + MAVROS from RoboStack (pixi); Docker on Raspberry Pi OS Lite as a fallback |
 | Flight Controller | Pixhawk1 (fmuv3, 2MB flash), USB → `/dev/ttyACM0` |
 | Firmware | ArduSub 4.5.7, VECTORED_6DOF frame (8 thrusters on SERVO1–8) |
 | Depth Sensor | Blue Robotics Bar30 on I2C |
@@ -15,28 +16,50 @@ Onboard computer software for the underwater ROV. Runs on Raspberry Pi 5 (Ubuntu
 
 ## Quick Start
 
-### Native (recommended for development)
+### Recommended: AlmaLinux 10 + RoboStack (pixi)
+
+ROS 2 Lyrical and MAVROS come from [RoboStack](https://robostack.github.io) through [pixi](https://pixi.sh), pinned in `pixi.toml` / `pixi.lock` for both `linux-aarch64` (Pi 5 / CM5) and `linux-64` (laptop testing). Nothing ROS-related is installed system-wide.
 
 ```bash
 git clone git@github.com:aikios/rov-onboard.git ~/rov_ws
 cd ~/rov_ws
-source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
-source install/setup.bash
-
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export CYCLONEDDS_URI=file://$HOME/rov_ws/cyclonedds_onboard.xml
-
-./start.sh          # foreground (Ctrl+C to stop)
-./start.sh -d       # daemon mode (logs in ./logs/)
-./stop.sh           # stop everything
+./host-setup/setup-almalinux.sh                         # run as your user, not sudo
+./host-setup/setup-almalinux.sh --network --autostart   # optional: static IPs + start on boot
 ```
 
-### Docker
+The script installs pixi, adds you to `dialout` (Pixhawk serial), disables Cockpit if present, trusts `192.168.1.0/24` in firewalld, then runs `pixi install`, `pixi run geoids` (GeographicLib geoid MAVROS needs), `pixi run build` and `pixi run check`.
+
+- `--network` sets `eth0` to `192.168.1.70/24` (tether) and `usb0` to `192.168.7.1/24` (Pi Zero camera link). Override with `TETHER_IFACE`, `CAMERA_IFACE`, etc.
+- `--autostart` installs `rov-onboard.service`, which runs `start.sh` on every boot (`journalctl -u rov-onboard -f` for logs).
+
+Log out/in once (dialout), then:
 
 ```bash
-./start-docker.sh   # builds image if needed, starts all containers
-./stop-docker.sh    # stops and removes containers
+./start.sh          # re-runs itself inside the pixi env; foreground (Ctrl+C to stop)
+./start.sh -d       # daemon mode (logs in ./logs/)
+./stop.sh
+```
+
+`start.sh` waits up to 20 s for `/dev/ttyACM0` (the Pixhawk enumerates a few seconds after boot; `joy_to_mavlink` only connects at startup), installs the geoid if missing, and builds the workspace on first run.
+
+Day to day:
+
+| Command | What it does |
+|---|---|
+| `pixi run build` | `colcon build --symlink-install` |
+| `pixi run check` | Imports (rclpy, mavros_msgs, pymavlink), MAVROS present, geoid present, Pixhawk serial access |
+| `pixi run geoids` | Downloads GeographicLib data into `./.geographiclib` |
+| `rov-shell` (or `pixi shell`) | Shell with ROS sourced: `ros2 topic list`, `ros2 topic echo /rov/depth_current` |
+
+Commit `pixi.lock` after the first successful install. `rosdep` doesn't apply inside pixi; add dependencies with `pixi add`.
+
+### Alternative: Raspberry Pi OS Lite + Docker
+
+```bash
+sudo ./host-setup/setup-pi5.sh            # Docker, groups, log limits
+./start-docker.sh                         # builds the Lyrical image on first run
+./start-docker.sh --build                 # rebuild after code changes
+./stop-docker.sh
 ```
 
 ## ROS2 Packages
@@ -109,7 +132,9 @@ CycloneDDS with unicast peer discovery (no multicast). Edit `cyclonedds_onboard.
 <Peer address="192.168.1.70"/>  <!-- this Pi (self) -->
 ```
 
-All containers and native nodes use `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`.
+All containers and native nodes use `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp` (Lyrical's default is still Fast DDS, so this must stay set).
+
+The Pi has several interfaces (`eth0`, `usb0`, `wlan0`, `docker0`). If DDS ever binds to the wrong one, uncomment the `<Interfaces>` block in `cyclonedds_onboard.xml` to pin it to the tether address.
 
 ## Flight Controller Setup
 
@@ -144,12 +169,9 @@ Setup guide: `pi-webcam-gadget-setup.md` on the Pi 5 at `~/pi-webcam-gadget-setu
 
 ## Dependencies
 
-Installed by Dockerfile / `start.sh` prerequisites:
+RoboStack environment (`pixi.toml`): `ros-lyrical-ros-base`, `ros-lyrical-rmw-cyclonedds-cpp`, `ros-lyrical-mavros`, `ros-lyrical-mavros-extras`, `ros-lyrical-mavros-msgs`, `ros-lyrical-std-srvs`, `lxml`, `colcon-common-extensions`, `setuptools>=68,<80`, and `pymavlink` from PyPI. GeographicLib geoid data via `pixi run geoids`.
 
-- `ros-jazzy-rmw-cyclonedds-cpp`
-- `ros-jazzy-mavros`, `ros-jazzy-mavros-extras`, `ros-jazzy-mavros-msgs`
-- `ros-jazzy-std-srvs`
-- `python3-pymavlink`
+Docker fallback (Dockerfile): the same ROS packages from the official `ros:lyrical` images.
 
 ## Related Repo
 

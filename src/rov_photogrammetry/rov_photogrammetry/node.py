@@ -1,4 +1,5 @@
 """Photogrammetry + camera preview node. Polls /preview for low-res frames."""
+import array
 import urllib.request
 import rclpy
 from rclpy.node import Node
@@ -30,7 +31,7 @@ class PhotogrammetryNode(Node):
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = 'camera_preview'
             msg.format = 'jpeg'
-            msg.data = list(data)
+            msg.data = array.array('B', data)  # fast buffer copy; list(data) builds millions of ints
             self.preview_pub.publish(msg)
             if not self.preview_ok:
                 self.preview_ok = True
@@ -49,7 +50,7 @@ class PhotogrammetryNode(Node):
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = 'photogrammetry_camera'
             msg.format = 'jpeg'
-            msg.data = list(data)
+            msg.data = array.array('B', data)  # fast buffer copy; list(data) builds millions of ints
             self.image_pub.publish(msg)
             self.capture_count += 1
             response.success = True

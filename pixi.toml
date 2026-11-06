@@ -1,0 +1,48 @@
+# Onboard environment: ROS 2 Lyrical + MAVROS from RoboStack, managed by pixi.
+# Runs on the Raspberry Pi 5 / CM5 (linux-aarch64) under AlmaLinux 10, with no system ROS.
+# linux-64 is included so the stack can be built and smoke-tested on a laptop too.
+#
+#   pixi install          # create the environment (first time, a few GB)
+#   pixi run geoids       # GeographicLib geoid data MAVROS needs (one time, ~20 MB)
+#   pixi run build        # colcon build
+#   pixi run start        # = ./start.sh   (start.sh also re-runs itself under pixi automatically)
+#   pixi shell            # interactive shell with ROS sourced (ros2 topic list, etc.)
+#
+# Commit pixi.lock after the first successful `pixi install` so every machine gets identical versions.
+
+[workspace]
+name = "rov-onboard"
+version = "0.1.0"
+description = "ROV onboard computer: flight control bridge, MAVROS telemetry, photogrammetry camera (ROS 2 Lyrical via RoboStack)"
+channels = ["https://prefix.dev/robostack-lyrical", "https://prefix.dev/conda-forge"]
+platforms = ["linux-aarch64", "linux-64"]
+
+[dependencies]
+ros-lyrical-ros-base = "*"            # rclpy, ros2 CLI, launch, std/sensor msgs
+ros-lyrical-rmw-cyclonedds-cpp = "*"  # Cyclone DDS with unicast peers (Fast DDS is the default)
+ros-lyrical-mavros = "*"              # reads FC telemetry from UDP:14550 -> /mavros/*
+ros-lyrical-mavros-extras = "*"       # listed as exec_depend in rov_flight/package.xml
+ros-lyrical-mavros-msgs = "*"         # joy_to_mavlink uses OverrideRCIn/State/VfrHud
+ros-lyrical-std-srvs = "*"            # Trigger/SetBool services
+lxml = "*"                            # pymavlink dependency, from conda-forge so nothing compiles
+colcon-common-extensions = "*"
+# setuptools >=80 changed `setup.py develop`, which colcon --symlink-install relies on;
+# very old pins like <=58.2 break on Python 3.12+. This range works for both.
+setuptools = ">=68,<80"
+
+[pypi-dependencies]
+# Prebuilt wheels exist for aarch64 and x86_64 (pymavlink pulls fastcrc, also prebuilt)
+pymavlink = "*"
+
+[activation]
+# RMW/Cyclone config, GeographicLib data path for MAVROS, and our built packages
+scripts = ["scripts/pixi-activate.sh"]
+
+[tasks]
+geoids = "bash scripts/install-geoids.sh"
+build = "colcon build --symlink-install"
+clean = "rm -rf build install log"
+start = "./start.sh"
+start-bg = "./start.sh -d"
+stop = "./stop.sh"
+check = "bash scripts/check-env.sh"

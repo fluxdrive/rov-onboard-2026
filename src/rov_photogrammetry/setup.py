@@ -17,7 +17,7 @@ setup(
     maintainer_email='hydromeda@todo.todo',
     description='Onboard photogrammetry: Pi Zero camera bridge (preview + capture)',
     license='MIT',
-    tests_require=['pytest'],
+    extras_require={'test': ['pytest']},
     entry_points={
         'console_scripts': [
             'node = rov_photogrammetry.node:main',

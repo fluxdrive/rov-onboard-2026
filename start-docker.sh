@@ -1,6 +1,7 @@
 #!/bin/bash
 # ROV Onboard — start all services in Docker
-# Usage: ./start-docker.sh
+# Usage: ./start-docker.sh           (builds image on first run)
+#        ./start-docker.sh --build   (rebuild after code changes)
 
 set -e
 
@@ -27,12 +28,11 @@ if [ ! -e /dev/ttyACM0 ]; then
 fi
 
 # Start containers
-docker compose up -d
+docker compose up -d "$@"
 sleep 5
 
 # Verify
 echo ''
 docker compose ps --format 'table {{.Name}}\t{{.Status}}'
 echo ''
-docker logs rov_ws-joy_to_mavlink-1 2>&1 | tail -2
-docker logs rov_ws-photogrammetry-1 2>&1 | tail -2
+docker compose logs --tail 2 joy_to_mavlink photogrammetry

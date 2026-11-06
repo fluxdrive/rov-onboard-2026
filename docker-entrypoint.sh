@@ -1,5 +1,6 @@
 #!/bin/bash
 set +u
-source /opt/ros/jazzy/setup.bash
+# ROS_DISTRO is set by the ros:<distro> base image (lyrical)
+source "/opt/ros/${ROS_DISTRO:-lyrical}/setup.bash"
 source /ros_ws/install/setup.bash
 exec "$@"

@@ -21,7 +21,7 @@ setup(
     maintainer_email='hydromeda@todo.todo',
     description='ROV flight control: joystick to MAVLink, MAVROS bridge, depth hold PID',
     license='MIT',
-    tests_require=['pytest'],
+    extras_require={'test': ['pytest']},
     entry_points={
         'console_scripts': [
             'joy_to_mavlink = rov_flight.joy_to_mavlink:main',

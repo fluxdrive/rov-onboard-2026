@@ -1,28 +1,29 @@
+# All services share one image (built once) — ROS 2 Lyrical
+x-rov: &rov
+  image: rov-onboard:lyrical
+  build: .
+  network_mode: host
+  restart: unless-stopped   # with Docker enabled on boot, the ROV comes up on power-on
+
 services:
   joy_to_mavlink:
-    build: .
-    network_mode: host
+    <<: *rov
     privileged: true  # for /dev/ttyACM0 serial access
     volumes:
       - /dev:/dev
     command: ros2 run rov_flight joy_to_mavlink
-    restart: unless-stopped
     # Owns FC serial port, forwards telemetry to MAVROS via UDP:14550
     # Must start before MAVROS
 
   mavros:
-    build: .
-    network_mode: host
+    <<: *rov
     command: ros2 launch rov_flight mavros.launch.py
     depends_on:
       joy_to_mavlink:
         condition: service_started
-    restart: unless-stopped
     # Reads FC telemetry from UDP:14550, publishes ROS topics
 
   photogrammetry:
-    build: .
-    network_mode: host
+    <<: *rov
     command: ros2 run rov_photogrammetry node
-    restart: unless-stopped
     # Polls Pi Zero camera for preview, handles full-res captures
