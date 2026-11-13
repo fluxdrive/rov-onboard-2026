@@ -295,15 +295,28 @@ class JoyToMavlink(Node):
         self.get_logger().info(f'Joy→MAVLink ready (direct serial, {rate}Hz)')
 
     def _serial_reader(self):
-        """Background: read raw bytes from FC serial, forward to MAVROS UDP."""
+        """Background: read raw bytes from FC serial, forward to MAVROS UDP.
+
+        Waits on the port with select() instead of polling: pymavlink opens the port non-blocking,
+        so a plain read() loop spun one CPU core at 100% (with or without a Pixhawk attached)."""
+        import select
+        import time
         while True:
+            port = self.mav.port if self.mav else None
+            if port is None:
+                time.sleep(0.5)          # no FC connected (joy_to_mavlink only connects at startup)
+                continue
             try:
-                if self.mav and self.mav.port:
-                    data = self.mav.port.read(512)
-                    if data:
-                        self.mavros_sock.sendto(data, self.mavros_addr)
+                ready, _, _ = select.select([port.fileno()], [], [], 0.2)
+                if not ready:
+                    continue
+                data = port.read(max(1, getattr(port, 'in_waiting', 0) or 512))
+                if data:
+                    self.mavros_sock.sendto(data, self.mavros_addr)
+                else:
+                    time.sleep(0.01)     # readable but empty: device going away; don't spin
             except Exception:
-                import time; time.sleep(0.1)
+                time.sleep(0.1)
 
     def _heartbeat_loop(self):
         """Send GCS heartbeat to keep FC alive."""
